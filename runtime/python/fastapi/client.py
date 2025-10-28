@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import argparse
-import logging
-import requests
-import torch
-import torchaudio
+
 import numpy as np
+import requests
+import soundfile as sf
+import torch
 
 
 def main():
@@ -50,17 +50,22 @@ def main():
     tts_audio = b''
     for r in response.iter_content(chunk_size=16000):
         tts_audio += r
-    tts_speech = torch.from_numpy(np.array(np.frombuffer(tts_audio, dtype=np.int16))).unsqueeze(dim=0)
-    logging.info('save response to {}'.format(args.tts_wav))
-    torchaudio.save(args.tts_wav, tts_speech, target_sr)
-    logging.info('get response')
+    tts_speech = torch.from_numpy(np.frombuffer(response.content, dtype=np.int16)).unsqueeze(dim=0)
+
+    # 使用 soundfile 保存（更稳定、更兼容）
+    audio_data = tts_speech.squeeze().cpu().numpy()
+    sf.write(args.tts_wav, audio_data, target_sr)
+
+    print(f"Successfully saved audio to {args.tts_wav}")
+    print(f"Sample rate: {target_sr} Hz")
+    print(f"Duration: {len(audio_data) / target_sr:.2f} seconds")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--host',
                         type=str,
-                        default='0.0.0.0')
+                        default='localhost')
     parser.add_argument('--port',
                         type=int,
                         default='50000')
