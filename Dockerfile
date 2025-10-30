@@ -56,17 +56,19 @@ ENV PIP_DEFAULT_TIMEOUT=120
 ENV PIP_RETRIES=10
 
 ########################################
-# 依赖构建阶段：安装 Python 依赖
+# 依赖构建阶段：安装 Python 依赖 + 生成 gRPC 代码
 ########################################
 FROM base AS builder
 
 COPY requirements.txt .
 COPY wheel_packages ./wheel_packages
 
-# 关键优化：使用 BuildKit 缓存 + 清理
+# 安装 Python 依赖
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt -f wheel_packages && \
+    pip install -r requirements.txt -f wheel_packages && \
+    # 添加 grpcio-tools（用于生成 gRPC 代码）
+    pip install grpcio-tools>=1.48.0 && \
     # 清理 pip 临时文件
     rm -rf /tmp/* && \
     # 删除不必要的文件
@@ -80,6 +82,16 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     # 清理 conda 缓存
     conda clean -ay 2>/dev/null || true && \
     rm -rf /opt/conda/pkgs/*
+
+# 复制项目代码并生成 gRPC 代码（在 builder 阶段完成）
+COPY ./runtime /opt/CosyVoice/runtime
+
+RUN cd /opt/CosyVoice/runtime/python/grpc && \
+    python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. cosyvoice.proto && \
+    ls -la && \
+    echo "gRPC code generated successfully" && \
+    # 清理临时文件
+    rm -rf /tmp/* /root/.cache/*
 
 ########################################
 # 最终运行阶段（从 runtime 基础镜像开始）
@@ -112,6 +124,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         locales \
         fontconfig \
         fonts-wqy-zenhei \
+        curl \
     && sed -i 's/# zh_CN.UTF-8 UTF-8/zh_CN.UTF-8 UTF-8/' /etc/locale.gen \
     && locale-gen zh_CN.UTF-8 \
     && fc-cache -fv \
@@ -129,6 +142,9 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
 # 从 builder 阶段复制已安装并清理过的 Python 包
 COPY --from=builder /opt/conda /opt/conda
 
+# 从 builder 阶段复制项目代码（包含已生成的 gRPC 代码）
+COPY --from=builder /opt/CosyVoice/runtime /opt/CosyVoice/runtime
+
 # 再次清理（防止复制时带入的缓存）
 RUN rm -rf /opt/conda/pkgs/* \
     && rm -rf /root/.cache/* \
@@ -136,17 +152,8 @@ RUN rm -rf /opt/conda/pkgs/* \
     && find /opt/conda -type f -name '*.pyc' -delete \
     && find /opt/conda -type f -name '*.pyo' -delete
 
-# 复制项目代码
-COPY ./runtime /opt/CosyVoice/runtime
-
-# 生成 gRPC 代码
-RUN cd runtime/python/grpc && \
-    python3 -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. cosyvoice.proto && \
-    # 清理临时文件
-    rm -rf /tmp/* /root/.cache/*
-
 # 暴露端口
-EXPOSE 50000
+EXPOSE 50000 50001 8000
 
 # 健康检查（可选）
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
