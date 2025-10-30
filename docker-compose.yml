@@ -10,6 +10,7 @@ services:
     command: tail -f /dev/null
     ports:
       - "50000:50000"
+      - "50001:50001"
     volumes:
       # 时区同步（双保险）
       - /etc/localtime:/etc/localtime:ro
@@ -29,6 +30,7 @@ services:
       - ./examples:/opt/CosyVoice/examples
       #- ./third_party:/opt/CosyVoice/third_party
       - ./tools:/opt/CosyVoice/tools
+      - ./modelscope_hub:/root/.cache/modelscope/hub
     environment:
       - TZ=Asia/Shanghai
       - LANG=zh_CN.UTF-8
