@@ -55,3 +55,6 @@ pretrained_models/*
 *_pb2_grpc.py
 *_pb2.py
 *.tar
+/audio2face.tar.gz
+/cosyvoice.v1.1.tar.gz
+/audio2face-3d-1.3.log
