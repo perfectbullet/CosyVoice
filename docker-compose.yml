@@ -1,0 +1,49 @@
+name: cosyvoice-stack
+
+services:
+  cosyvoice:
+    image: cosyvoice:v1.1
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cosyvoice
+    command: tail -f /dev/null
+    ports:
+      - "50000:50000"
+    volumes:
+      # 时区同步（双保险）
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      # 代码挂载（开发时使用）
+      - ./runtime:/opt/CosyVoice/runtime
+      # 模型和数据
+      - ./pretrained_models:/opt/CosyVoice/pretrained_models
+      - ./data:/opt/CosyVoice/data
+      - ./vllm_example.py:/opt/CosyVoice/vllm_example.py
+      - ./webui.py:/opt/CosyVoice/webui.py
+      - ./README.md:/opt/CosyVoice/README.md
+      - ./requirements.txt:/opt/CosyVoice/requirements.txt
+      - ./wheel_packages:/opt/CosyVoice/wheel_packages
+      - ./cosyvoice:/opt/CosyVoice/cosyvoice
+      - ./asset:/asset
+      - ./examples:/opt/CosyVoice/examples
+      #- ./third_party:/opt/CosyVoice/third_party
+      - ./tools:/opt/CosyVoice/tools
+    environment:
+      - TZ=Asia/Shanghai
+      - LANG=zh_CN.UTF-8
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - cosyvoice-network
+
+networks:
+  cosyvoice-network:
+    driver: bridge
