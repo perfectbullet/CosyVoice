@@ -21,6 +21,7 @@ import torch
 
 def main():
     url = "http://{}:{}/inference_{}".format(args.host, args.port, args.mode)
+    print("url: {}".format(url))
     if args.mode == 'sft':
         payload = {
             'tts_text': args.tts_text,
@@ -50,7 +51,7 @@ def main():
     tts_audio = b''
     for r in response.iter_content(chunk_size=16000):
         tts_audio += r
-    tts_speech = torch.from_numpy(np.frombuffer(response.content, dtype=np.int16)).unsqueeze(dim=0)
+    tts_speech = torch.from_numpy(np.frombuffer(tts_audio, dtype=np.int16).copy()).unsqueeze(dim=0)
 
     # 使用 soundfile 保存（更稳定、更兼容）
     audio_data = tts_speech.squeeze().cpu().numpy()
@@ -65,27 +66,27 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--host',
                         type=str,
-                        default='localhost')
+                        default='192.168.8.230')
     parser.add_argument('--port',
                         type=int,
                         default='50000')
     parser.add_argument('--mode',
-                        default='sft',
+                        default='zero_shot',
                         choices=['sft', 'zero_shot', 'cross_lingual', 'instruct'],
                         help='request mode')
     parser.add_argument('--tts_text',
                         type=str,
-                        default='你好，我是通义千问语音合成大模型，请问有什么可以帮您的吗？')
+                        default='欲买桂花同载酒, 只可惜故人，何日再见呢？')
     parser.add_argument('--spk_id',
                         type=str,
                         default='中文女')
     parser.add_argument('--prompt_text',
                         type=str,
-                        default='希望你以后能够做的比我还好呦。')
+                        default='白天你尽管到处跑，晚上可得小心点。我不在的时候，务必谨慎行动。')
     parser.add_argument('--prompt_wav',
                         type=str,
-                        default='../../../asset/zero_shot_prompt.wav')
-    parser.add_argument('--instruct_text',
+                        default='../../../asset/hutao1.wav')
+    parser.add_argument('--hutao1.wav',
                         type=str,
                         default='Theo \'Crimson\', is a fiery, passionate rebel leader. \
                                  Fights with fervor for justice, but struggles with impulsiveness.')
