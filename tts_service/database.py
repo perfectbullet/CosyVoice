@@ -101,5 +101,35 @@ class Database:
             return SpeakerInfo(**speaker_dict)
         return None
 
+    @classmethod
+    async def get_recent_speakers(cls, limit: int = 10) -> List[SpeakerInfo]:
+        """获取最近的说话人列表"""
+        db = cls.get_database()
+        cursor = db.speakers.find({}).sort("_id", -1).limit(limit)
+        speakers = await cursor.to_list(length=limit)
+
+        speaker_list = []
+        for speaker_dict in speakers:
+            speaker_dict.pop('_id', None)
+            speaker_list.append(SpeakerInfo(**speaker_dict))
+
+        logger.info(f"获取到 {len(speaker_list)} 个说话人")
+        return speaker_list
+
+    @classmethod
+    async def get_all_speakers(cls) -> List[SpeakerInfo]:
+        """获取所有说话人列表"""
+        db = cls.get_database()
+        cursor = db.speakers.find({}).sort("_id", -1)
+        speakers = await cursor.to_list(length=None)
+
+        speaker_list = []
+        for speaker_dict in speakers:
+            speaker_dict.pop('_id', None)
+            speaker_list.append(SpeakerInfo(**speaker_dict))
+
+        logger.info(f"获取到所有 {len(speaker_list)} 个说话人")
+        return speaker_list
+
 
 db = Database()

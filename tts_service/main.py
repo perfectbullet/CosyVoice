@@ -211,6 +211,32 @@ async def upload_speaker(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/speakers/{spk_id}", response_model=SpeakerInfo)
+async def get_speaker(spk_id: str):
+    """查询指定说话人信息"""
+    speaker = await db.get_speaker(spk_id)
+    if not speaker:
+        raise HTTPException(
+            status_code=404,
+            detail=f"说话人 {spk_id} 不存在"
+        )
+    return speaker
+
+
+@app.get("/speakers")
+async def list_speakers(limit: int = 10):
+    """获取说话人列表"""
+    try:
+        speakers = await db.get_recent_speakers(limit=limit)
+        return {
+            "speakers": speakers,
+            "total": len(speakers)
+        }
+    except Exception as e:
+        logger.error(f"获取说话人列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
 
