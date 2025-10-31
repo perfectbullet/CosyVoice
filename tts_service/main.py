@@ -101,7 +101,7 @@ async def create_task(request: TaskCreateRequest):
                 detail=f"说话人 {request.spk_id} 不存在"
             )
 
-        task_id = f"tts_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        task_id = f"tts_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
         task = TTSTask(
             task_id=task_id,
