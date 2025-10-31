@@ -166,6 +166,14 @@ async def upload_speaker(
 ):
     """注册说话人"""
     try:
+        # 检查说话人是否已存在
+        existing_speaker = await db.get_speaker(spk_id)
+        if existing_speaker:
+            raise HTTPException(
+                status_code=400,
+                detail=f"说话人 {spk_id} 已存在，请使用不同的 spk_id"
+            )
+
         if not audio_file.filename.lower().endswith(('.wav', '.mp3', '.flac')):
             raise HTTPException(status_code=400, detail="仅支持 WAV、MP3、FLAC 格式")
 
