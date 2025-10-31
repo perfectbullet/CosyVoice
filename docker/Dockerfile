@@ -93,8 +93,6 @@ ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 # 关键：将虚拟环境的 bin 目录放在 PATH 最前面
 ENV PATH=/opt/conda/envs/${VENV}/bin:$PATH
 
-ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
-
 SHELL ["/bin/bash", "--login", "-c"]
 
 WORKDIR /workspace/CosyVoice
