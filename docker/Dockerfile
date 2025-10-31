@@ -57,12 +57,37 @@ WORKDIR /workspace/CosyVoice
 COPY ./requirements.txt ./
 
 # 安装 Python 依赖（使用 pip 缓存挂载）
+# 步骤 1: 构建所有 wheel 包（优先使用本地，缺失的从镜像源下载并构建）
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=./wheel_packages,target=/tmp/wheel_packages \
-    pip install -r requirements.txt \
-    -f /tmp/wheel_packages \
-    -i https://mirrors.aliyun.com/pypi/simple/ \
-    --trusted-host=mirrors.aliyun.com
+    set -e && \
+    echo "========================================" && \
+    echo "步骤 1: 构建 wheel 包到 /tmp/wheels" && \
+    echo "========================================" && \
+    pip wheel -w /tmp/wheel_packages \
+        -r requirements.txt \
+        -i https://mirrors.aliyun.com/pypi/simple/ \
+        --trusted-host=mirrors.aliyun.com && \
+    echo "========================================" && \
+    echo "Wheel 包构建完成，共 $(ls -1 /tmp/wheel_packages | wc -l) 个文件" && \
+    ls -lh /tmp/wheel_packages/ && \
+    echo "========================================"
+
+# 步骤 2: 从本地 wheel 安装（完全离线，快速）
+RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=./wheel_packages,target=/tmp/wheel_packages \
+    set -e && \
+    echo "========================================" && \
+    echo "步骤 2: 从本地 wheel 包安装" && \
+    echo "========================================" && \
+    pip install \
+        --no-index \
+        --find-links /tmp/wheel_packages \
+        -r requirements.txt && \
+    echo "========================================" && \
+    echo "安装完成！已安装的包：" && \
+    pip list && \
+    echo "========================================"
 
 # ==================================================================
 # 阶段 3: 最终镜像
