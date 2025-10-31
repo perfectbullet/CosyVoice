@@ -187,6 +187,9 @@ async def upload_speaker(
         success = await tts_engine.add_speaker(spk_id, prompt_text, audio_path)
 
         if not success:
+            # 如果添加失败，删除已保存的音频文件
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
             raise HTTPException(status_code=500, detail="添加说话人失败")
 
         speaker = SpeakerInfo(
