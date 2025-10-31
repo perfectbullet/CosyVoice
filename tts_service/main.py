@@ -1,14 +1,15 @@
+import asyncio
 import logging
 import os
 import sys
-import asyncio
 import uuid
-from datetime import datetime
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 # 添加父目录到 Python 路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'third_party', 'Matcha-TTS'))
+sys.path.insert(0,
+                os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'third_party', 'Matcha-TTS'))
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware

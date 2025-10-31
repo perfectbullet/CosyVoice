@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class TTSEngine:
     def __init__(self):
         self.model: Optional[CosyVoice2] = None
-        self.sample_rate: int = 22050
+        self.sample_rate: Optional[int] = None
 
     async def initialize(self):
         """初始化模型"""
