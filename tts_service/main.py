@@ -23,6 +23,7 @@ from tts_service.models import (
     TTSTask,
     TaskStatus,
     TaskListResponse,
+    TaskDetailListResponse,
     SpeakerInfo
 )
 from tts_service.tts_engine import tts_engine
@@ -136,6 +137,16 @@ async def list_tasks():
     """获取任务列表"""
     task_ids = await db.get_recent_tasks(limit=10)
     return TaskListResponse(task_ids=task_ids, total=len(task_ids))
+
+@app.get("/tasks/detail/list")
+async def list_tasks_detail(limit: int = 10):
+    """获取任务详细信息列表"""
+    try:
+        tasks = await db.get_recent_tasks_detail(limit=limit)
+        return TaskDetailListResponse(tasks=tasks, total=len(tasks))
+    except Exception as e:
+        logger.error(f"获取任务详细列表失败: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/tasks/{task_id}/audio")

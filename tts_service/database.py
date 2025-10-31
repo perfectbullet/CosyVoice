@@ -131,5 +131,19 @@ class Database:
         logger.info(f"获取到所有 {len(speaker_list)} 个说话人")
         return speaker_list
 
+    @classmethod
+    async def get_recent_tasks_detail(cls, limit: int = 10) -> List[TTSTask]:
+        """获取最近的任务详细信息列表"""
+        db = cls.get_database()
+        cursor = db.tasks.find({}).sort("created_at", -1).limit(limit)
+        tasks = await cursor.to_list(length=limit)
+
+        task_list = []
+        for task_dict in tasks:
+            task_dict.pop('_id', None)
+            task_list.append(TTSTask(**task_dict))
+
+        logger.info(f"获取到 {len(task_list)} 个任务详情")
+        return task_list
 
 db = Database()

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -54,3 +54,13 @@ class TaskCreateResponse(BaseModel):
 class TaskListResponse(BaseModel):
     task_ids: list[str] = Field(..., description="最近10条任务ID列表")
     total: int = Field(..., description="返回的任务数量")
+
+class TaskListResponse(BaseModel):
+    """任务列表响应（简单版本，仅返回task_id）"""
+    task_ids: List[str]
+    total: int
+
+class TaskDetailListResponse(BaseModel):
+    """任务详细列表响应"""
+    tasks: List[TTSTask]
+    total: int
