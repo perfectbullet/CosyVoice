@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # 服务配置
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 50002
 
     # CosyVoice 根目录
     COSYVOICE_ROOT: str = "/opt/CosyVoice"

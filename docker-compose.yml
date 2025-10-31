@@ -6,8 +6,6 @@ services:
     image: mongo:7.0
     container_name: tts_mongodb
     restart: unless-stopped
-    ports:
-      - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: tts_password_2024
@@ -26,13 +24,13 @@ services:
 
   # CosyVoice TTS 服务
   cosyvoice:
-    image: cosyvoice:v1.1
+    image: cosyvoice:v1.2
     build:
       context: .
       dockerfile: Dockerfile
     container_name: cosyvoice_tts_service
     # 修改启动命令为运行 FastAPI 服务
-    command: python /opt/CosyVoice/tts_service/main.py
+    command: tail -f /dev/null
     ports:
       - "50000:50000"  # 保留原有端口
       - "50001:50001"  # 保留原有端口
@@ -63,17 +61,13 @@ services:
       - ./examples:/opt/CosyVoice/examples
       - ./tools:/opt/CosyVoice/tools
       - ./modelscope_hub:/root/.cache/modelscope/hub
+      - ./third_party:/opt/CosyVoice/third_party
     environment:
       - TZ=Asia/Shanghai
       - LANG=zh_CN.UTF-8
       - PYTHONUNBUFFERED=1
-      # MongoDB 配置（新增）
-      - MONGODB_URL=mongodb://admin:tts_password_2024@mongodb:27017/
-      - MONGODB_DB_NAME=tts_service
-      # 模型和输出路径配置（新增）
-      - MODEL_PATH=/opt/CosyVoice/pretrained_models/CosyVoice2-0.5B
-      - AUDIO_OUTPUT_DIR=/opt/CosyVoice/data/audio_outputs
-      - SPEAKER_AUDIO_DIR=/opt/CosyVoice/data/speaker_audios
+    env_file:
+      - .env
     depends_on:
       mongodb:
         condition: service_healthy
