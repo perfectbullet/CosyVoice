@@ -56,23 +56,13 @@ WORKDIR /workspace/CosyVoice
 
 COPY ./requirements.txt ./
 
-# 安装 Python 依赖（使用 pip 缓存挂载）
-# 步骤 1: 构建所有 wheel 包（优先使用本地，缺失的从镜像源下载并构建）
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=bind,source=./wheel_packages,target=/tmp/wheel_packages \
-    set -e && \
-    echo "========================================" && \
-    echo "步骤 1: 构建 wheel 包到 /tmp/wheels" && \
-    echo "========================================" && \
-    pip wheel -w /tmp/wheel_packages \
-        -r requirements.txt \
-        -i https://mirrors.aliyun.com/pypi/simple/ \
-        --trusted-host=mirrors.aliyun.com && \
-    echo "========================================" && \
-    echo "Wheel 包构建完成，共 $(ls -1 /tmp/wheel_packages | wc -l) 个文件" && \
-    ls -lh /tmp/wheel_packages/ && \
-    echo "========================================"
+# 关键：将虚拟环境的 bin 目录放在 PATH 最前面
+ENV PATH=/opt/conda/envs/${VENV}/bin:$PATH
 
+RUN python --version && \
+    python -c "import sys; print(f'Python路径: {sys.executable}')" && \
+    pip --version
+# 安装 Python 依赖（使用 pip 缓存挂载）
 # 步骤 2: 从本地 wheel 安装（完全离线，快速）
 RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=./wheel_packages,target=/tmp/wheel_packages \
@@ -100,6 +90,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV CONDA_DEFAULT_ENV=${VENV}
 ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
+# 关键：将虚拟环境的 bin 目录放在 PATH 最前面
+ENV PATH=/opt/conda/envs/${VENV}/bin:$PATH
+
 ENV PYTHONPATH="${PYTHONPATH}:/workspace/CosyVoice:/workspace/CosyVoice/third_party/Matcha-TTS"
 
 SHELL ["/bin/bash", "--login", "-c"]
