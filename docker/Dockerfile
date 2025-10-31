@@ -22,11 +22,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get install -y git build-essential curl wget ffmpeg unzip git-lfs sox libsox-dev && \
     git lfs install
 
-# 安装 Miniforge（使用缓存）
-RUN --mount=type=cache,target=/root/.cache \
-    wget --quiet https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh -O ~/miniforge.sh && \
-    /bin/bash ~/miniforge.sh -b -p /opt/conda && \
-    rm ~/miniforge.sh && \
+# 使用构建时绑定挂载，不会增加镜像层大小
+RUN --mount=type=bind,source=./Miniforge3-Linux-x86_64.sh,target=/tmp/miniforge.sh \
+    /bin/bash /tmp/miniforge.sh -b -p /opt/conda && \
     ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh
 
 ENV PATH=/opt/conda/bin:$PATH
@@ -53,15 +51,16 @@ ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 
 WORKDIR /workspace
 
-# 先克隆代码（仅用于获取 requirements.txt）
-RUN git clone --recursive https://github.com/FunAudioLLM/CosyVoice.git
-
 # 先复制 requirements.txt（利用 Docker 层缓存）
 WORKDIR /workspace/CosyVoice
 
+COPY ./requirements.txt ./
+
 # 安装 Python 依赖（使用 pip 缓存挂载）
 RUN --mount=type=cache,target=/root/.cache/pip \
+    --mount=type=bind,source=./wheel_packages,target=/tmp/wheel_packages \
     pip install -r requirements.txt \
+    -f /tmp/wheel_packages \
     -i https://mirrors.aliyun.com/pypi/simple/ \
     --trusted-host=mirrors.aliyun.com
 
