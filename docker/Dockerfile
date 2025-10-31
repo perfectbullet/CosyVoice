@@ -89,9 +89,8 @@ ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV CONDA_DEFAULT_ENV=${VENV}
-ENV PATH=/opt/conda/bin:/opt/conda/envs/${VENV}/bin:$PATH
 # 关键：将虚拟环境的 bin 目录放在 PATH 最前面
-ENV PATH=/opt/conda/envs/${VENV}/bin:$PATH
+ENV PATH=/opt/conda/envs/${VENV}/bin:/opt/conda/bin:$PATH
 
 SHELL ["/bin/bash", "--login", "-c"]
 
