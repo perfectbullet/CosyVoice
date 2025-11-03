@@ -78,34 +78,52 @@ class TTSEngine:
             loop = asyncio.get_event_loop()
 
             def do_inference():
-                output = None
-                for i, j in enumerate(self.model.inference_zero_shot(
-                        text,
-                        '',
-                        '',
-                        zero_shot_spk_id=spk_id,
-                        stream=False
-                )):
-                    if i == 0:
-                        output = j['tts_speech']
-                        break
-                return output
+                try:
+                    # 收集所有生成的语音片段
+                    audio_segments = []
 
-            tts_speech = await loop.run_in_executor(None, do_inference)
+                    for i, j in enumerate(self.model.inference_zero_shot(
+                            text,
+                            '',
+                            '',
+                            zero_shot_spk_id=spk_id,
+                            stream=False
+                    )):
+                        logger.info(f"生成第 {i + 1} 段语音")
+                        audio_segments.append(j['tts_speech'])
 
-            if tts_speech is None:
-                logger.error("推理返回空结果")
-                return False
+                    # 如果没有生成任何语音
+                    if not audio_segments:
+                        logger.error("未生成任何语音片段")
+                        return False
 
-            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                    # 拼接多段语音
+                    import torch
+                    if len(audio_segments) == 1:
+                        complete_audio = audio_segments[0]
+                    else:
+                        complete_audio = torch.cat(audio_segments, dim=1)
+                        logger.info(f"已拼接 {len(audio_segments)} 段语音，总shape: {complete_audio.shape}")
 
-            await loop.run_in_executor(
-                None,
-                lambda: torchaudio.save(output_path, tts_speech, self.sample_rate)
-            )
+                    # 确保输出目录存在
+                    os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-            logger.info(f"音频已保存: {output_path}")
-            return True
+                    # 保存完整音频
+                    torchaudio.save(output_path, complete_audio, self.sample_rate)
+                    logger.info(f"音频已保存: {output_path}")
+
+                    return True
+
+                except Exception as e:
+                    logger.error(f"推理或保存过程出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return False
+
+            # 在线程池中执行整个推理和保存过程
+            success = await loop.run_in_executor(None, do_inference)
+
+            return success
 
         except Exception as e:
             logger.error(f"合成失败: {e}")
