@@ -24,13 +24,14 @@ services:
 
   # CosyVoice TTS 服务
   cosyvoice:
-    image: cosyvoice:v1.2
+    image: cosyvoice:v1.6
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: cosyvoice_tts_service
+      dockerfile: docker/Dockerfile
+    container_name: cosyvoice_v6
+    working_dir: /opt/CosyVoice
     # 修改启动命令为运行 FastAPI 服务
-    command: tail -f /dev/null
+    command: python tts_service/main.py
     ports:
       - "50000:50000"  # 保留原有端口
       - "50001:50001"  # 保留原有端口
