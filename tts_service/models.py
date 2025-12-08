@@ -9,6 +9,32 @@ class TaskStatus(str, Enum):
     DONE = "done"
     FAILED = "failed"
 
+class SpeakerTaskStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+class SpeakerRegistrationTask(BaseModel):
+    task_id: str = Field(..., description="任务ID")
+    spk_id: str = Field(..., description="说话人ID")
+    prompt_text: Optional[str] = Field(None, description="提示文本")
+    audio_filename: str = Field(..., description="音频文件名")
+    audio_path: str = Field(..., description="音频临时路径")
+    status: SpeakerTaskStatus = Field(default=SpeakerTaskStatus.PENDING, description="任务状态")
+    description: Optional[str] = Field(None, description="任务描述或错误信息")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="创建时间")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="更新时间")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "task_id": "speaker_20241030_123456_abc123",
+                "spk_id": "my_speaker",
+                "status": "done"
+            }
+        }
+
 class TTSTask(BaseModel):
     task_id: str = Field(..., description="任务ID")
     text: str = Field(..., description="待转换文本")
@@ -64,3 +90,7 @@ class TaskDetailListResponse(BaseModel):
     """任务详细列表响应"""
     tasks: List[TTSTask]
     total: int
+
+class SpeakerTaskCreateResponse(BaseModel):
+    task_id: str = Field(..., description="说话人注册任务ID")
+    message: str = Field(default="说话人注册任务已创建", description="响应消息")

@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 
 from tts_service.config import settings
-from tts_service.models import TTSTask, SpeakerInfo, TaskStatus
+from tts_service.models import TTSTask, SpeakerInfo, TaskStatus, SpeakerRegistrationTask, SpeakerTaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -145,5 +145,40 @@ class Database:
 
         logger.info(f"获取到 {len(task_list)} 个任务详情")
         return task_list
+
+    @classmethod
+    async def create_speaker_task(cls, task: SpeakerRegistrationTask) -> str:
+        """创建说话人注册任务"""
+        db = cls.get_database()
+        task_dict = task.model_dump()
+        task_dict['status'] = task.status.value
+        await db.speaker_tasks.insert_one(task_dict)
+        logger.info(f"说话人注册任务已创建: {task.task_id}")
+        return task.task_id
+
+    @classmethod
+    async def get_speaker_task(cls, task_id: str) -> Optional[SpeakerRegistrationTask]:
+        """根据任务ID获取说话人注册任务"""
+        db = cls.get_database()
+        task_dict = await db.speaker_tasks.find_one({"task_id": task_id})
+        if task_dict:
+            task_dict.pop('_id', None)
+            return SpeakerRegistrationTask(**task_dict)
+        return None
+
+    @classmethod
+    async def update_speaker_task(cls, task_id: str, update_data: dict):
+        """更新说话人注册任务"""
+        db = cls.get_database()
+        update_data['updated_at'] = datetime.utcnow()
+
+        if 'status' in update_data and isinstance(update_data['status'], SpeakerTaskStatus):
+            update_data['status'] = update_data['status'].value
+
+        await db.speaker_tasks.update_one(
+            {"task_id": task_id},
+            {"$set": update_data}
+        )
+        logger.info(f"说话人注册任务已更新: {task_id}")
 
 db = Database()
