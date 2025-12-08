@@ -14,6 +14,7 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import aiofiles
+import httpx
 
 from tts_service.config import settings
 from tts_service.database import db
@@ -172,7 +173,7 @@ async def get_audio(task_id: str):
 @app.post("/speakers")
 async def upload_speaker(
         spk_id: str = Form(...),
-        prompt_text: str = Form(...),
+        prompt_text: str = Form(""),
         audio_file: UploadFile = File(...)
 ):
     """注册说话人"""
@@ -194,9 +195,51 @@ async def upload_speaker(
         async with aiofiles.open(audio_path, 'wb') as f:
             content = await audio_file.read()
             await f.write(content)
-
+        
+        # 如果 prompt_text 为空，调用 ASR 服务识别音频文本
+        if not prompt_text or prompt_text.strip() == "":
+            logger.info(f"prompt_text 为空，调用 ASR 服务识别音频: {audio_path}")
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    with open(audio_path, 'rb') as audio_f:
+                        files = {'audio': (audio_filename, audio_f, 'audio/wav')}
+                        data = {
+                            'host': settings.ASR_HOST,
+                            'port': settings.ASR_PORT,
+                            'is_ssl': settings.ASR_IS_SSL,
+                            'mode': settings.ASR_MODE
+                        }
+                        response = await client.post(
+                            f"{settings.ASR_SERVICE_URL}/transcribe",
+                            files=files,
+                            data=data
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            if result.get('code') == 0:
+                                prompt_text = result.get('text', '')
+                                logger.info(f"ASR 识别成功: {prompt_text}")
+                            else:
+                                logger.error(f"ASR 识别失败: {result}")
+                                raise HTTPException(status_code=500, detail="ASR 识别失败")
+                        else:
+                            logger.error(f"ASR 服务请求失败: {response.status_code}")
+                            raise HTTPException(status_code=500, detail=f"ASR 服务请求失败: {response.status_code}")
+            except httpx.RequestError as e:
+                logger.error(f"ASR 服务连接失败: {e}")
+                raise HTTPException(status_code=500, detail=f"ASR 服务连接失败: {str(e)}")
+            except Exception as e:
+                logger.error(f"调用 ASR 服务时出错: {e}")
+                raise HTTPException(status_code=500, detail=f"调用 ASR 服务失败: {str(e)}")
+            
+            # 如果识别后仍为空，返回错误
+            if not prompt_text or prompt_text.strip() == "":
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                raise HTTPException(status_code=400, detail="无法识别音频文本，请提供 prompt_text")
+        
         success = await tts_engine.add_speaker(spk_id, prompt_text, audio_path)
-
         if not success:
             # 如果添加失败，删除已保存的音频文件
             if os.path.exists(audio_path):

@@ -63,6 +63,7 @@ services:
       - ./tools:/opt/CosyVoice/tools
       - ./modelscope_hub:/root/.cache/modelscope/hub
       - ./third_party:/opt/CosyVoice/third_party
+      - ./.env:/opt/CosyVoice/.env
     environment:
       - TZ=Asia/Shanghai
       - LANG=zh_CN.UTF-8

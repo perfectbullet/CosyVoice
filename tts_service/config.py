@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     # CosyVoice 根目录
     COSYVOICE_ROOT: str = "/opt/CosyVoice"
 
+    # ASR 服务配置
+    ASR_SERVICE_URL: str = os.getenv("ASR_SERVICE_URL", "http://192.168.8.230:30097")
+    ASR_HOST: str = os.getenv("ASR_HOST", "192.168.8.230")
+    ASR_PORT: str = os.getenv("ASR_PORT", "30097")
+    ASR_IS_SSL: str = os.getenv("ASR_IS_SSL", "true")
+    ASR_MODE: str = os.getenv("ASR_MODE", "2pass")
+
     class Config:
         env_file = ".env"
 
