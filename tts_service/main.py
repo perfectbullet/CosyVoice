@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import aiofiles
 import httpx
+import torchaudio
 
 from tts_service.config import settings
 from tts_service.database import db
@@ -202,6 +203,40 @@ async def upload_speaker(
         async with aiofiles.open(audio_path, 'wb') as f:
             content = await audio_file.read()
             await f.write(content)
+        
+        # 检查音频时长并处理
+        try:
+            # 加载音频文件
+            audio_data, sample_rate = torchaudio.load(audio_path)
+            duration = audio_data.shape[1] / sample_rate
+            
+            logger.info(f"音频时长: {duration:.2f}秒, 采样率: {sample_rate}Hz")
+            
+            # 检查音频时长是否小于3秒
+            if duration < 3.0:
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"音频时长不足，当前时长 {duration:.2f}秒，要求至少 3 秒"
+                )
+            
+            # 如果音频时长大于30秒，截取前30秒
+            if duration > 30.0:
+                logger.info(f"音频时长 {duration:.2f}秒 超过30秒，截取前30秒")
+                max_samples = int(30.0 * sample_rate)
+                audio_data = audio_data[:, :max_samples]
+                # 保存截取后的音频
+                torchaudio.save(audio_path, audio_data, sample_rate)
+                logger.info(f"音频已截取并保存，新时长: 30秒")
+        
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"处理音频文件时出错: {e}")
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+            raise HTTPException(status_code=500, detail=f"音频文件处理失败: {str(e)}")
         
         # 创建说话人注册任务
         speaker_task = SpeakerRegistrationTask(
