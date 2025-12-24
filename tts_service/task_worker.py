@@ -113,10 +113,10 @@ class TaskWorker:
                             else:
                                 raise Exception(f"ASR 服务请求失败: {response.status_code}, {response.text}")
                 except Exception as e:
-                    error_msg = f"调用 ASR 服务失败: {str(e)}"
+                    import traceback
+                    error_details = traceback.format_exc()
+                    error_msg = f"调用 ASR 服务失败: {str(e)}\n详细错误:\n{error_details}"
                     logger.error(error_msg)
-                    if os.path.exists(task.audio_path):
-                        os.remove(task.audio_path)
                     await db.update_speaker_task(task_id, {
                         "status": SpeakerTaskStatus.FAILED,
                         "description": error_msg
@@ -125,10 +125,14 @@ class TaskWorker:
                 
                 # 如果识别后仍为空，返回错误
                 if not prompt_text or prompt_text.strip() == "":
-                    error_msg = "无法识别音频文本"
+                    error_msg = f"无法识别音频文本 - ASR返回了空文本。音频文件: {task.audio_path}"
                     logger.error(error_msg)
                     if os.path.exists(task.audio_path):
-                        os.remove(task.audio_path)
+                        try:
+                            os.remove(task.audio_path)
+                            logger.info(f"已删除音频文件: {task.audio_path}")
+                        except Exception as cleanup_error:
+                            error_msg += f"\n文件清理失败: {str(cleanup_error)}"
                     await db.update_speaker_task(task_id, {
                         "status": SpeakerTaskStatus.FAILED,
                         "description": error_msg
@@ -156,32 +160,48 @@ class TaskWorker:
                 logger.info(f"说话人注册任务完成: {task_id}")
             else:
                 # 如果添加失败，删除已保存的音频文件
+                error_msg = f"添加说话人失败 - spk_id: {task.spk_id}, audio_path: {task.audio_path}"
                 if os.path.exists(task.audio_path):
-                    os.remove(task.audio_path)
+                    try:
+                        os.remove(task.audio_path)
+                        error_msg += " | 音频文件已清理"
+                        logger.info(f"已删除音频文件: {task.audio_path}")
+                    except Exception as cleanup_error:
+                        error_msg += f" | 文件清理失败: {str(cleanup_error)}"
+                else:
+                    error_msg += " | 音频文件不存在"
                 await db.update_speaker_task(task_id, {
                     "status": SpeakerTaskStatus.FAILED,
-                    "description": "添加说话人失败"
+                    "description": error_msg
                 })
-                logger.error(f"说话人注册任务失败: {task_id}")
+                logger.error(f"说话人注册任务失败: {task_id} - {error_msg}")
 
         except Exception as e:
-            error_msg = f"说话人注册任务处理异常: {str(e)}"
-            logger.error(f"{error_msg}, task_id: {task_id}")
-
             import traceback
-            traceback.print_exc()
+            error_trace = traceback.format_exc()
+            error_msg = f"说话人注册任务处理异常: {str(e)}\n\n完整堆栈跟踪:\n{error_trace}"
+            logger.error(f"task_id: {task_id}\n{error_msg}")
 
             # 清理音频文件
+            cleanup_info = ""
             try:
                 task = await db.get_speaker_task(task_id)
-                if task and os.path.exists(task.audio_path):
-                    os.remove(task.audio_path)
-            except:
-                pass
+                if task and task.audio_path:
+                    if os.path.exists(task.audio_path):
+                        try:
+                            os.remove(task.audio_path)
+                            cleanup_info = f"\n音频文件已清理: {task.audio_path}"
+                            logger.info(f"已删除音频文件: {task.audio_path}")
+                        except Exception as cleanup_error:
+                            cleanup_info = f"\n文件清理失败: {task.audio_path}, 错误: {str(cleanup_error)}"
+                    else:
+                        cleanup_info = f"\n音频文件不存在: {task.audio_path}"
+            except Exception as cleanup_error:
+                cleanup_info = f"\n文件清理过程异常: {str(cleanup_error)}"
 
             await db.update_speaker_task(task_id, {
                 "status": SpeakerTaskStatus.FAILED,
-                "description": error_msg
+                "description": error_msg + cleanup_info
             })
 
     async def process_task(self, task_id: str):

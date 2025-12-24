@@ -94,3 +94,8 @@ class TaskDetailListResponse(BaseModel):
 class SpeakerTaskCreateResponse(BaseModel):
     task_id: str = Field(..., description="说话人注册任务ID")
     message: str = Field(default="说话人注册任务已创建", description="响应消息")
+    original_format: Optional[str] = Field(None, description="原始音频格式")
+    original_sample_rate: Optional[int] = Field(None, description="原始采样率(Hz)")
+    original_duration: Optional[float] = Field(None, description="原始音频时长(秒)")
+    processed_duration: Optional[float] = Field(None, description="处理后音频时长(秒)")
+    converted_to_16k: Optional[bool] = Field(None, description="是否转换为16kHz")
