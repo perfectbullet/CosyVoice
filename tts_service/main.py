@@ -180,7 +180,15 @@ async def upload_speaker(
         prompt_text: str = Form(""),
         audio_file: UploadFile = File(...)
 ):
-    """注册说话人（异步）"""
+    """
+    注册说话人（异步）
+    
+    参数:
+    - spk_id: 说话人ID
+    - prompt_text: 提示文本（可选）
+    - audio_file: 说话人参考音频文件（支持 WAV 采样率: 16000Hz）, 音频时长大于20s会被截断为20s。
+    
+    """
     try:
         # 检查说话人是否已存在
         existing_speaker = await db.get_speaker(spk_id)
@@ -221,14 +229,14 @@ async def upload_speaker(
                     detail=f"音频时长不足，当前时长 {duration:.2f}秒，要求至少 3 秒"
                 )
             
-            # 如果音频时长大于30秒，截取前30秒
-            if duration > 30.0:
-                logger.info(f"音频时长 {duration:.2f}秒 超过30秒，截取前30秒")
-                max_samples = int(30.0 * sample_rate)
+            # 如果音频时长大于20秒，截取前20秒
+            if duration > 20.0:
+                logger.info(f"音频时长 {duration:.2f}秒 超过20秒，截取前20秒")
+                max_samples = int(20.0 * sample_rate)
                 audio_data = audio_data[:, :max_samples]
                 # 保存截取后的音频
                 torchaudio.save(audio_path, audio_data, sample_rate)
-                logger.info(f"音频已截取并保存，新时长: 30秒")
+                logger.info(f"音频已截取并保存，新时长: 20秒")
         
         except HTTPException:
             raise

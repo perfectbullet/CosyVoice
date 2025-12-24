@@ -88,7 +88,7 @@ class TaskWorker:
             if not prompt_text or prompt_text.strip() == "":
                 logger.info(f"prompt_text 为空，调用 ASR 服务识别音频: {task.audio_path}")
                 try:
-                    async with httpx.AsyncClient(timeout=30.0) as client:
+                    async with httpx.AsyncClient(timeout=120.0) as client:
                         with open(task.audio_path, 'rb') as audio_f:
                             files = {'audio': (task.audio_filename, audio_f, 'audio/wav')}
                             data = {
@@ -111,7 +111,7 @@ class TaskWorker:
                                 else:
                                     raise Exception(f"ASR 识别失败: {result}")
                             else:
-                                raise Exception(f"ASR 服务请求失败: {response.status_code}")
+                                raise Exception(f"ASR 服务请求失败: {response.status_code}, {response.text}")
                 except Exception as e:
                     error_msg = f"调用 ASR 服务失败: {str(e)}"
                     logger.error(error_msg)
