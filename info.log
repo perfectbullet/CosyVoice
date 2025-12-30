@@ -1,0 +1,30 @@
+(base) user@server:/data/metahuman_work/CosyVoice$ docker compose logs -n100 -f cosyvoice 
+cosyvoice_v6  | 
+cosyvoice_v6  | ==========
+cosyvoice_v6  | == CUDA ==
+cosyvoice_v6  | ==========
+cosyvoice_v6  | 
+cosyvoice_v6  | CUDA Version 12.4.1
+cosyvoice_v6  | 
+cosyvoice_v6  | Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+cosyvoice_v6  | 
+cosyvoice_v6  | This container image and its contents are governed by the NVIDIA Deep Learning Container License.
+cosyvoice_v6  | By pulling and using the container, you accept the terms and conditions of this license:
+cosyvoice_v6  | https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
+cosyvoice_v6  | 
+cosyvoice_v6  | A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
+cosyvoice_v6  | 
+cosyvoice_v6  | [2025-12-30 02:18:48,870] [INFO] [real_accelerator.py:203:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+cosyvoice_v6  | df: /root/.triton/autotune: No such file or directory
+cosyvoice_v6  | failed to import ttsfrd, use wetext instead
+cosyvoice_v6  | 2025-12-30 02:18:50,428 DEBUG Using selector: EpollSelector
+cosyvoice_v6  | INFO:     Started server process [1]
+cosyvoice_v6  | INFO:     Waiting for application startup.
+cosyvoice_v6  | 2025-12-30 02:18:50,445 INFO 正在启动 TTS 服务...
+cosyvoice_v6  | 2025-12-30 02:18:50,459 INFO 成功连接到 MongoDB
+cosyvoice_v6  | 2025-12-30 02:18:50,459 INFO 正在加载模型: /opt/CosyVoice/pretrained_models/CosyVoice2-0.5B
+cosyvoice_v6  | Sliding Window Attention is enabled but not implemented for `sdpa`; unexpected results may be encountered.
+cosyvoice_v6  | /opt/conda/envs/cosyvoice/lib/python3.10/site-packages/lightning/fabric/__init__.py:41: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+cosyvoice_v6  | /opt/conda/envs/cosyvoice/lib/python3.10/site-packages/diffusers/models/lora.py:393: FutureWarning: `LoRACompatibleLinear` is deprecated and will be removed in version 1.0.0. Use of `LoRACompatibleLinear` is deprecated. Please switch to PEFT backend by installing PEFT: `pip install peft`.
+cosyvoice_v6  |   deprecate("LoRACompatibleLinear", "1.0.0", deprecation_message)
+cosyvoice_v6  | 2025-12-30 02:18:54,214 INFO input frame rate=25
