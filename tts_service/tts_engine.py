@@ -23,6 +23,7 @@ class TTSEngine:
     def __init__(self):
         self.model: Optional[CosyVoice2] = None
         self.sample_rate: Optional[int] = None
+        self.output_sample_rate: int = 16000  # 输出采样率（16000Hz）
         self._stream_queues: dict[str, asyncio.Queue] = {}  # 流式合成队列（异步）
 
     async def initialize(self):
@@ -177,6 +178,12 @@ class TTSEngine:
                 def _model_inference():
                     """同步推理函数（在线程池中执行）"""
                     results = []
+                    # 创建重采样器：从24000Hz重采样到16000Hz
+                    resampler = torchaudio.transforms.Resample(
+                        orig_freq=self.sample_rate,
+                        new_freq=self.output_sample_rate
+                    )
+                    
                     for i, chunk in enumerate(self.model.inference_zero_shot(
                         text,
                         '',
@@ -186,7 +193,13 @@ class TTSEngine:
                     )):
                         audio_data = chunk.get('tts_speech')
                         if audio_data is not None:
-                            audio_bytes = self._convert_to_pcm_bytes(audio_data)
+                            # 重采样到16000Hz
+                            if isinstance(audio_data, torch.Tensor):
+                                audio_resampled = resampler(audio_data)
+                            else:
+                                audio_resampled = audio_data
+                            
+                            audio_bytes = self._convert_to_pcm_bytes(audio_resampled)
                             if audio_bytes and len(audio_bytes) > 0:
                                 results.append((i, audio_bytes))
                     return results

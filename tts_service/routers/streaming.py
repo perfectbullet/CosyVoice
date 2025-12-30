@@ -27,6 +27,7 @@ class StreamingSynthesisResponse(BaseModel):
     """流式合成响应"""
     stream_id: str
     message: str
+    sample_rate: int  # 服务端实际输出采样率
 
 
 @router.post("/synthesize", response_model=StreamingSynthesisResponse)
@@ -87,7 +88,8 @@ async def start_streaming_synthesis(request: StreamingSynthesisRequest):
         
         return StreamingSynthesisResponse(
             stream_id=stream_id,
-            message="合成已启动"
+            message="合成已启动",
+            sample_rate=tts_engine.output_sample_rate  # 返回实际输出采样率
         )
     
     except HTTPException:

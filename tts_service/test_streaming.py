@@ -7,11 +7,12 @@ import base64
 import sys
 import os
 import struct
+import time
 
 # 配置
 BASE_URL = "http://192.168.8.230:50002"
 SPEAKER_ID = "胡桃"  # 请替换为你的说话人ID
-TEST_TEXT = "你好，这是一个流式语音合成测试。今天天气真不错。请替换为你的说话人ID"
+TEST_TEXT = "你好，这是一个流式语音合成测试。"
 
 def text_generator():
     yield '收到好友从远方寄来的生日礼物，'
@@ -62,6 +63,9 @@ def add_wav_header(pcm_data: bytes, sample_rate: int = 16000, num_channels: int 
 
 def test_streaming_tts():
     """测试流式TTS合成"""
+    # 记录总耗时
+    total_start_time = time.time()
+    
     print("=" * 60)
     print("流式TTS合成测试")
     print("=" * 60)
@@ -70,6 +74,10 @@ def test_streaming_tts():
     print(f"\n[1/3] 启动流式合成...")
     print(f"文本: {TEST_TEXT}")
     print(f"说话人: {SPEAKER_ID}")
+    
+    synthesis_request_time = time.time()
+    
+    synthesis_request_time = time.time()
     
     try:
         response = requests.post(
@@ -83,9 +91,15 @@ def test_streaming_tts():
         response.raise_for_status()
         
         result = response.json()
+        synthesis_request_end_time = time.time()
+        request_latency = (synthesis_request_end_time - synthesis_request_time) * 1000  # ms
+        
         stream_id = result["stream_id"]
+        sample_rate = result["sample_rate"]  # 获取服务端采样率
         print(f"✓ 合成已启动")
         print(f"  Stream ID: {stream_id}")
+        print(f"  采样率: {sample_rate}Hz")
+        print(f"  启动耗时: {request_latency:.2f}ms")
         
     except requests.exceptions.RequestException as e:
         print(f"✗ 启动失败: {e}")
@@ -99,6 +113,8 @@ def test_streaming_tts():
     audio_chunks = []
     chunk_count = 0
     total_bytes = 0
+    first_chunk_time = None  # 记录首个音频块时间
+    start_receive_time = time.time()
     
     try:
         url = f"{BASE_URL}/streaming/audio/{stream_id}"
@@ -114,6 +130,12 @@ def test_streaming_tts():
                         data = json.loads(line_str[6:])
                         
                         if data['type'] == 'audio_chunk':
+                            # 记录首个音频块时间
+                            if first_chunk_time is None:
+                                first_chunk_time = time.time()
+                                ttfb = (first_chunk_time - synthesis_request_time) * 1000  # ms
+                                print(f"  首字节延迟 (TTFB): {ttfb:.2f}ms")
+                            
                             # 解码 base64 音频数据
                             audio_bytes = base64.b64decode(data['data'])
                             audio_chunks.append(audio_bytes)
@@ -125,9 +147,18 @@ def test_streaming_tts():
                                 print(f"  已接收 {chunk_count} 个音频块，共 {total_bytes:,} 字节")
                         
                         elif data['type'] == 'complete':
+                            receive_complete_time = time.time()
+                            receive_duration = (receive_complete_time - start_receive_time) * 1000  # ms
+                            
                             print(f"✓ 流式传输完成")
                             print(f"  总块数: {chunk_count}")
                             print(f"  总大小: {total_bytes:,} 字节")
+                            print(f"  接收耗时: {receive_duration:.2f}ms")
+                            if chunk_count > 0:
+                                avg_chunk_size = total_bytes / chunk_count
+                                avg_chunk_time = receive_duration / chunk_count
+                                print(f"  平均块大小: {avg_chunk_size:.0f} 字节")
+                                print(f"  平均块耗时: {avg_chunk_time:.2f}ms")
                             break
                         
                         elif data['type'] == 'error':
@@ -147,8 +178,8 @@ def test_streaming_tts():
         
         try:
             # 添加 WAV 文件头
-            # 服务器发送的是 PCM 数据，采样率 16000Hz，单声道，16bit
-            audio_with_header = add_wav_header(complete_audio, sample_rate=16000, num_channels=1, sample_width=2)
+            # 服务器发送的是 PCM 数据，采样率是服务端实际输出的
+            audio_with_header = add_wav_header(complete_audio, sample_rate=sample_rate, num_channels=1, sample_width=2)
             
             with open(output_file, 'wb') as f:
                 f.write(audio_with_header)
@@ -157,6 +188,16 @@ def test_streaming_tts():
             print(f"✓ 音频已保存")
             print(f"  文件: {output_file}")
             print(f"  大小: {file_size:,} 字节")
+            
+            # 计算总耗时
+            total_end_time = time.time()
+            total_duration = (total_end_time - total_start_time) * 1000  # ms
+            audio_duration_s = (len(complete_audio) / (sample_rate * 2)) if sample_rate else 0  # 16bit=2字节
+            print(f"\n  音频时长: {audio_duration_s:.2f}s")
+            print(f"  总耗时: {total_duration:.2f}ms")
+            if audio_duration_s > 0:
+                realtime_factor = total_duration / (audio_duration_s * 1000)
+                print(f"  实时因子 (RTF): {realtime_factor:.2f}x")
             
         except Exception as e:
             print(f"✗ 保存失败: {e}")
@@ -167,7 +208,7 @@ def test_streaming_tts():
     
     print(f"\n{'=' * 60}")
     print("测试完成！")
-    print("=" * 60)
+    print(f"{'=' * 60}")
     return True
 
 
