@@ -16,7 +16,7 @@ from tts_service.config import settings
 from tts_service.database import db
 from tts_service.tts_engine import tts_engine
 from tts_service.task_worker import task_worker
-from tts_service.routers import tasks, speakers, streaming
+from tts_service.routers import tasks, speakers, streaming, websocket
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,6 +66,7 @@ app.add_middleware(
 app.include_router(tasks.router)
 app.include_router(speakers.router)
 app.include_router(streaming.router)
+app.include_router(websocket.router)
 
 
 @app.get("/")

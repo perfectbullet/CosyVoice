@@ -14,7 +14,6 @@
 #### 1. **WebSocket 接口（推荐）**
 
 ```python
-# 服务端 API 设计
 WebSocket: ws://192.168.8.230:50002/streaming/synthesize_ws
 
 # 客户端发送消息格式

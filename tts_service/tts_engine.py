@@ -181,7 +181,8 @@ class TTSEngine:
                     # 创建重采样器：从24000Hz重采样到16000Hz
                     resampler = torchaudio.transforms.Resample(
                         orig_freq=self.sample_rate,
-                        new_freq=self.output_sample_rate
+                        new_freq=self.output_sample_rate,
+                        lowpass_filter_width=6  # 添加这一行
                     )
                     
                     for i, chunk in enumerate(self.model.inference_zero_shot(
