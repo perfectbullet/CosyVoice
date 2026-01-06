@@ -4,6 +4,7 @@ import logging
 import base64
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
 from tts_service.database import db
@@ -62,15 +63,27 @@ async def websocket_synthesize(websocket: WebSocket):
     
     try:
         while True:
+            # 检查连接是否仍然打开
+            if websocket.client_state != WebSocketState.CONNECTED:
+                logger.info("WebSocket 连接未打开，退出主循环")
+                break
+            
             # 接收客户端消息
             try:
                 data = await websocket.receive_text()
                 request = json.loads(data)
+            except WebSocketDisconnect:
+                logger.info("WebSocket 连接已断开")
+                break
             except json.JSONDecodeError:
-                await websocket.send_json({
-                    "type": "error",
-                    "data": "Invalid JSON format"
-                })
+                try:
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_json({
+                            "type": "error",
+                            "data": "Invalid JSON format"
+                        })
+                except Exception as send_error:
+                    logger.warning(f"发送错误消息失败: {send_error}")
                 continue
             
             # 处理合成请求
@@ -88,38 +101,54 @@ async def websocket_synthesize(websocket: WebSocket):
             
             # 验证参数
             if not text:
-                await websocket.send_json({
-                    "type": "error",
-                    "chunk_id": chunk_id,
-                    "data": "文本不能为空"
-                })
+                try:
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_json({
+                            "type": "error",
+                            "chunk_id": chunk_id,
+                            "data": "文本不能为空"
+                        })
+                except Exception as send_error:
+                    logger.warning(f"发送验证错误消息失败: {send_error}")
                 continue
             
             if not spk_id:
-                await websocket.send_json({
-                    "type": "error",
-                    "chunk_id": chunk_id,
-                    "data": "说话人ID不能为空"
-                })
+                try:
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_json({
+                            "type": "error",
+                            "chunk_id": chunk_id,
+                            "data": "说话人ID不能为空"
+                        })
+                except Exception as send_error:
+                    logger.warning(f"发送验证错误消息失败: {send_error}")
                 continue
             
             # 检查说话人是否存在
             try:
                 speaker = await db.get_speaker(spk_id)
                 if not speaker:
-                    await websocket.send_json({
-                        "type": "error",
-                        "chunk_id": chunk_id,
-                        "data": f"说话人 {spk_id} 不存在"
-                    })
+                    try:
+                        if websocket.client_state == WebSocketState.CONNECTED:
+                            await websocket.send_json({
+                                "type": "error",
+                                "chunk_id": chunk_id,
+                                "data": f"说话人 {spk_id} 不存在"
+                            })
+                    except Exception as send_error:
+                        logger.warning(f"发送错误消息失败: {send_error}")
                     continue
             except Exception as e:
                 logger.error(f"检查说话人失败: {e}")
-                await websocket.send_json({
-                    "type": "error",
-                    "chunk_id": chunk_id,
-                    "data": f"检查说话人失败: {str(e)}"
-                })
+                try:
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_json({
+                            "type": "error",
+                            "chunk_id": chunk_id,
+                            "data": f"检查说话人失败: {str(e)}"
+                        })
+                except Exception as send_error:
+                    logger.warning(f"发送错误消息失败: {send_error}")
                 continue
             
             # 执行合成
@@ -166,38 +195,74 @@ async def websocket_synthesize(websocket: WebSocket):
                 
                 # 发送音频块
                 for i, audio_bytes in results:
-                    if not websocket.client_state:
-                        logger.info(f"WebSocket 连接已断开 (chunk_id={chunk_id})")
+                    # 检查连接是否仍然打开
+                    if websocket.client_state != WebSocketState.CONNECTED:
+                        logger.info(f"WebSocket 连接已断开，跳过发送数据 (chunk_id={chunk_id})")
                         break
                     
-                    # 编码为 base64
-                    audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
-                    
-                    await websocket.send_json({
-                        "type": "audio",
-                        "chunk_id": chunk_id,
-                        "data": audio_b64,
-                        "done": False
-                    })
-                    logger.debug(f"发送音频块 {i} (chunk_id={chunk_id}): {len(audio_bytes)} bytes")
+                    try:
+                        # 编码为 base64
+                        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+                        
+                        await websocket.send_json({
+                            "type": "audio",
+                            "chunk_id": chunk_id,
+                            "data": audio_b64,
+                            "done": False
+                        })
+                        logger.debug(f"发送音频块 {i} (chunk_id={chunk_id}): {len(audio_bytes)} bytes")
+                    except WebSocketDisconnect:
+                        logger.info(f"WebSocket 连接已断开，停止发送 (chunk_id={chunk_id})")
+                        break
+                    except Exception as send_error:
+                        logger.error(f"发送音频块失败: {send_error}")
+                        break
                 
                 # 发送完成信号
-                await websocket.send_json({
-                    "type": "complete",
-                    "chunk_id": chunk_id
-                })
-                logger.info(f"WebSocket 合成完成 (chunk_id={chunk_id})")
+                try:
+                    if websocket.client_state == WebSocketState.CONNECTED:
+                        await websocket.send_json({
+                            "type": "complete",
+                            "chunk_id": chunk_id
+                        })
+                        logger.info(f"WebSocket 合成完成 (chunk_id={chunk_id})")
+                    else:
+                        logger.info(f"WebSocket 已断开，跳过发送完成信号 (chunk_id={chunk_id})")
+                except WebSocketDisconnect:
+                    logger.info(f"WebSocket 连接已断开，无法发送完成信号 (chunk_id={chunk_id})")
+                    break  # 退出主循环
+                except Exception as send_error:
+                    error_msg = str(send_error)
+                    logger.warning(f"发送完成信号失败: {error_msg}")
+                    # 如果是连接相关错误，退出主循环
+                    if "close message" in error_msg or "not connected" in error_msg.lower():
+                        logger.info(f"检测到连接已关闭，退出主循环")
+                        break
                 
             except Exception as e:
                 logger.error(f"WebSocket 合成失败: {e}")
                 import traceback
                 traceback.print_exc()
                 
-                await websocket.send_json({
-                    "type": "error",
-                    "chunk_id": chunk_id,
-                    "data": f"合成失败: {str(e)}"
-                })
+                # 只在连接打开时发送错误信息
+                if websocket.client_state == WebSocketState.CONNECTED:
+                    try:
+                        await websocket.send_json({
+                            "type": "error",
+                            "chunk_id": chunk_id,
+                            "data": f"合成失败: {str(e)}"
+                        })
+                    except WebSocketDisconnect:
+                        logger.info(f"发送错误消息时连接已断开")
+                        break
+                    except Exception as error_send_error:
+                        error_msg = str(error_send_error)
+                        logger.warning(f"发送错误消息失败: {error_msg}")
+                        if "close message" in error_msg or "not connected" in error_msg.lower():
+                            logger.info(f"检测到连接已关闭，退出主循环")
+                            break
+                else:
+                    logger.info(f"WebSocket 已断开，跳过发送错误消息 (chunk_id={chunk_id})")
     
     except WebSocketDisconnect:
         logger.info("WebSocket 客户端已断开连接")
@@ -205,7 +270,9 @@ async def websocket_synthesize(websocket: WebSocket):
         logger.error(f"WebSocket 处理异常: {e}")
         import traceback
         traceback.print_exc()
-        try:
-            await websocket.close(code=1011, reason=str(e))
-        except Exception as close_error:
-            logger.error(f"关闭 WebSocket 失败: {close_error}")
+        # 只在连接打开时才尝试关闭
+        if websocket.client_state == WebSocketState.CONNECTED:
+            try:
+                await websocket.close(code=1011, reason=str(e))
+            except Exception as close_error:
+                logger.error(f"关闭 WebSocket 失败: {close_error}")

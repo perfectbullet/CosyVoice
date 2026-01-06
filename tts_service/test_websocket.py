@@ -62,7 +62,7 @@ async def test_websocket_tts():
     
     try:
         async with websockets.connect(WS_URL) as websocket:
-            print(f"✓ WebSocket 已连接")
+            print("✓ WebSocket 已连接")
             print()
             
             # 处理多个文本片段

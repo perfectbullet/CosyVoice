@@ -33,7 +33,7 @@ def add_wav_header(pcm_data: bytes, sample_rate: int = 16000, num_channels: int 
     Returns:
         完整的 WAV 文件数据（包含 RIFF 头）
     """
-    num_frames = len(pcm_data) // (num_channels * sample_width)
+    # num_frames = len(pcm_data) // (num_channels * sample_width)
     byte_rate = sample_rate * num_channels * sample_width
     block_align = num_channels * sample_width
     
@@ -96,7 +96,7 @@ def test_streaming_tts():
         
         stream_id = result["stream_id"]
         sample_rate = result["sample_rate"]  # 获取服务端采样率
-        print(f"✓ 合成已启动")
+        print("✓ 合成已启动")
         print(f"  Stream ID: {stream_id}")
         print(f"  采样率: {sample_rate}Hz")
         print(f"  启动耗时: {request_latency:.2f}ms")
@@ -108,7 +108,7 @@ def test_streaming_tts():
         return False
     
     # Step 2: 接收流式音频
-    print(f"\n[2/3] 接收流式音频...")
+    print("\n[2/3] 接收流式音频...")
     
     audio_chunks = []
     chunk_count = 0
