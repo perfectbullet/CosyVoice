@@ -20,6 +20,12 @@ TEXT_CHUNKS = [
     {"text": "那份意外的惊喜与深深的祝福", "chunk_id": 2},
     {"text": "让我心中充满了甜蜜的快乐，", "chunk_id": 3},
     {"text": "笑容如花儿般绽放。", "chunk_id": 4},
+    {"text": "感谢有你陪伴我走过的每一天，", "chunk_id": 5},
+    {"text": "你的友情如星光般璀璨，", "chunk_id": 6},
+    {"text": "照亮了我前行的路，", "chunk_id": 7},
+    {"text": "愿我们的友谊长存，", "chunk_id": 8},
+    {"text": "如同这美好的时光，", "chunk_id": 9},
+    {"text": "永远珍藏在心间。", "chunk_id": 10},
 ]
 
 
@@ -57,22 +63,25 @@ async def test_websocket_tts():
     print(f"连接地址: {WS_URL}")
     print(f"说话人: {SPEAKER_ID}")
     print()
-    
+
     total_start_time = time.time()
-    
+    all_audio_data = []  # 存储所有音频片段
+    total_chunks_processed = 0
+    total_audio_bytes = 0
+
     try:
         async with websockets.connect(WS_URL) as websocket:
             print("✓ WebSocket 已连接")
             print()
-            
+
             # 处理多个文本片段
             for chunk_info in TEXT_CHUNKS:
                 chunk_text = chunk_info["text"]
                 chunk_id = chunk_info["chunk_id"]
-                
+
                 print(f"[发送] Chunk #{chunk_id}: {chunk_text}")
                 request_start_time = time.time()
-                
+
                 # 构建请求
                 request = {
                     "action": "synthesize",
@@ -80,92 +89,113 @@ async def test_websocket_tts():
                     "spk_id": SPEAKER_ID,
                     "chunk_id": chunk_id
                 }
-                
+
                 # 发送请求
                 await websocket.send(json.dumps(request))
                 print("  请求已发送")
-                
+
                 # 接收响应
                 audio_chunks = []
                 chunk_count = 0
-                total_bytes = 0
                 first_chunk_time = None
-                
+
                 while True:
                     try:
                         message = await asyncio.wait_for(websocket.recv(), timeout=30)
                         response = json.loads(message)
-                        
+
                         if response["type"] == "audio":
                             # 记录首块时间
                             if first_chunk_time is None:
                                 first_chunk_time = time.time()
                                 ttfb = (first_chunk_time - request_start_time) * 1000
                                 print(f"  首字节延迟: {ttfb:.2f}ms")
-                            
+
                             # 解码音频数据
                             audio_bytes = base64.b64decode(response["data"])
                             audio_chunks.append(audio_bytes)
                             chunk_count += 1
-                            total_bytes += len(audio_bytes)
-                            
+
                             if chunk_count % 3 == 0:
+                                total_bytes = sum(len(chunk) for chunk in audio_chunks)
                                 print(f"  已接收 {chunk_count} 块，共 {total_bytes:,} 字节")
-                        
+
                         elif response["type"] == "complete":
                             receive_end_time = time.time()
                             receive_duration = (receive_end_time - request_start_time) * 1000
-                            
-                            # 合并音频
-                            complete_audio = b''.join(audio_chunks)
-                            
-                            # 保存为 WAV 文件
-                            output_file = f"ws_output_chunk_{chunk_id}.wav"
-                            audio_with_header = add_wav_header(complete_audio, sample_rate=16000)
-                            
-                            with open(output_file, 'wb') as f:
-                                f.write(audio_with_header)
-                            
-                            file_size = os.path.getsize(output_file)
-                            audio_duration = (len(complete_audio) / (16000 * 2)) if complete_audio else 0
-                            
+
+                            # 合并当前chunk的音频
+                            chunk_audio = b''.join(audio_chunks)
+
+                            # 添加到总音频列表
+                            all_audio_data.append(chunk_audio)
+                            total_chunks_processed += chunk_count
+                            total_audio_bytes += len(chunk_audio)
+
+                            audio_duration = (len(chunk_audio) / (16000 * 2)) if chunk_audio else 0
+
                             print("  ✓ 完成")
                             print(f"    块数: {chunk_count}")
-                            print(f"    大小: {file_size:,} 字节")
+                            print(f"    大小: {len(chunk_audio):,} 字节")
                             print(f"    耗时: {receive_duration:.2f}ms")
                             print(f"    音频时长: {audio_duration:.2f}s")
                             if audio_duration > 0:
                                 rtf = receive_duration / (audio_duration * 1000)
                                 print(f"    RTF: {rtf:.2f}x")
-                            print(f"    文件: {output_file}")
                             print()
                             break
-                        
+
                         elif response["type"] == "error":
                             print(f"  ✗ 错误: {response.get('data', 'Unknown error')}")
                             break
-                    
+
                     except asyncio.TimeoutError:
                         print("  ✗ 接收超时")
                         break
-            
+
+            # 合并所有音频为一个文件
             print("✓ 所有文本合成完成")
             print()
-    
+
+            if all_audio_data:
+                print("=" * 60)
+                print("正在合并音频...")
+                print("=" * 60)
+
+                # 合并所有音频数据
+                complete_audio = b''.join(all_audio_data)
+
+                # 添加 WAV 文件头
+                output_file = "ws_output_complete.wav"
+                audio_with_header = add_wav_header(complete_audio, sample_rate=16000)
+
+                with open(output_file, 'wb') as f:
+                    f.write(audio_with_header)
+
+                file_size = os.path.getsize(output_file)
+                total_duration = (len(complete_audio) / (16000 * 2)) if complete_audio else 0
+
+                print(f"✓ 合并完成")
+                print(f"  总块数: {total_chunks_processed}")
+                print(f"  文件大小: {file_size:,} 字节 ({file_size / 1024:.2f} KB)")
+                print(f"  总音频时长: {total_duration:.2f}s")
+                print(f"  保存路径: {output_file}")
+                print()
+
     except Exception as e:
         print(f"✗ 连接失败: {e}")
         import traceback
         traceback.print_exc()
         return False
-    
+
     # 统计总耗时
     total_end_time = time.time()
     total_duration = (total_end_time - total_start_time) * 1000
-    
+
     print(f"{'=' * 60}")
-    print(f"总耗时: {total_duration:.2f}ms")
+    print(f"总耗时: {total_duration:.2f}ms ({total_duration/1000:.2f}s)")
     print(f"{'=' * 60}")
-    
+
     return True
 
 
