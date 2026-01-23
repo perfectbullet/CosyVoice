@@ -2,6 +2,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import Optional, List
 from datetime import datetime
 import logging
+import time
 
 from tts_service.config import settings
 from tts_service.models import TTSTask, SpeakerInfo, TaskStatus, SpeakerRegistrationTask, SpeakerTaskStatus
@@ -11,6 +12,9 @@ logger = logging.getLogger(__name__)
 
 class Database:
     client: Optional[AsyncIOMotorClient] = None
+    # Speaker cache: spk_id -> (SpeakerInfo, timestamp)
+    _speaker_cache: dict[str, tuple[SpeakerInfo, float]] = {}
+    _cache_ttl: int = 3600  # Cache TTL in seconds (1 hour)
 
     @classmethod
     async def connect_db(cls):
@@ -89,16 +93,34 @@ class Database:
             {"$set": speaker_dict},
             upsert=True
         )
+        # Invalidate cache for this speaker
+        cls._speaker_cache.pop(speaker.spk_id, None)
         logger.info(f"说话人信息已保存: {speaker.spk_id}")
 
     @classmethod
     async def get_speaker(cls, spk_id: str) -> Optional[SpeakerInfo]:
-        """获取说话人信息"""
+        """获取说话人信息（带缓存）"""
+        # Check cache first
+        cached = cls._speaker_cache.get(spk_id)
+        if cached:
+            speaker_info, timestamp = cached
+            age = time.time() - timestamp
+            if age < cls._cache_ttl:
+                logger.debug(f"缓存命中: {spk_id}")
+                return speaker_info
+            else:
+                # Cache expired, remove it
+                cls._speaker_cache.pop(spk_id, None)
+
+        # Query from database
         db = cls.get_database()
         speaker_dict = await db.speakers.find_one({"spk_id": spk_id})
         if speaker_dict:
             speaker_dict.pop('_id', None)
-            return SpeakerInfo(**speaker_dict)
+            speaker_info = SpeakerInfo(**speaker_dict)
+            # Store in cache
+            cls._speaker_cache[spk_id] = (speaker_info, time.time())
+            return speaker_info
         return None
 
     @classmethod

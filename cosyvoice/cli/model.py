@@ -63,6 +63,8 @@ class CosyVoiceModel:
         self.mel_overlap_dict = {}
         self.flow_cache_dict = {}
         self.hift_cache_dict = {}
+        # condition variables for event-driven token notification (reduce polling delay)
+        self.token_conditions = {}
 
     def load(self, llm_model, flow_model, hift_model):
         self.llm.load_state_dict(torch.load(llm_model, map_location=self.device), strict=True)
@@ -101,6 +103,7 @@ class CosyVoiceModel:
         return {'min_shape': min_shape, 'opt_shape': opt_shape, 'max_shape': max_shape, 'input_names': input_names}
 
     def llm_job(self, text, prompt_text, llm_prompt_speech_token, llm_embedding, uuid):
+        cond = self.token_conditions.get(uuid)
         with self.llm_context, torch.cuda.amp.autocast(self.fp16 is True and hasattr(self.llm, 'vllm') is False):
             if isinstance(text, Generator):
                 assert isinstance(self, CosyVoice2Model) and not hasattr(self.llm, 'vllm'), 'streaming input text is only implemented for CosyVoice2 and do not support vllm!'
@@ -110,7 +113,12 @@ class CosyVoiceModel:
                                                      prompt_speech_token=llm_prompt_speech_token.to(self.device),
                                                      prompt_speech_token_len=torch.tensor([llm_prompt_speech_token.shape[1]], dtype=torch.int32).to(self.device),
                                                      embedding=llm_embedding.to(self.device)):
-                    self.tts_speech_token_dict[uuid].append(i)
+                    with self.lock:
+                        self.tts_speech_token_dict[uuid].append(i)
+                    # Notify waiting thread that a new token is available
+                    if cond:
+                        with cond:
+                            cond.notify()
             else:
                 for i in self.llm.inference(text=text.to(self.device),
                                             text_len=torch.tensor([text.shape[1]], dtype=torch.int32).to(self.device),
@@ -120,8 +128,17 @@ class CosyVoiceModel:
                                             prompt_speech_token_len=torch.tensor([llm_prompt_speech_token.shape[1]], dtype=torch.int32).to(self.device),
                                             embedding=llm_embedding.to(self.device),
                                             uuid=uuid):
-                    self.tts_speech_token_dict[uuid].append(i)
+                    with self.lock:
+                        self.tts_speech_token_dict[uuid].append(i)
+                    # Notify waiting thread that a new token is available
+                    if cond:
+                        with cond:
+                            cond.notify()
         self.llm_end_dict[uuid] = True
+        # Notify that LLM is complete
+        if cond:
+            with cond:
+                cond.notify()
 
     def vc_job(self, source_speech_token, uuid):
         self.tts_speech_token_dict[uuid] = source_speech_token.flatten().tolist()
@@ -174,11 +191,14 @@ class CosyVoiceModel:
             prompt_speech_feat=torch.zeros(1, 0, 80), source_speech_token=torch.zeros(1, 0, dtype=torch.int32), stream=False, speed=1.0, **kwargs):
         # this_uuid is used to track variables related to this inference thread
         this_uuid = str(uuid.uuid1())
+        # Create condition variable for event-driven token notification
+        token_cond = threading.Condition()
         with self.lock:
             self.tts_speech_token_dict[this_uuid], self.llm_end_dict[this_uuid] = [], False
             self.hift_cache_dict[this_uuid] = None
             self.mel_overlap_dict[this_uuid] = torch.zeros(1, 80, 0)
             self.flow_cache_dict[this_uuid] = torch.zeros(1, 80, 0, 2)
+            self.token_conditions[this_uuid] = token_cond
         if source_speech_token.shape[1] == 0:
             p = threading.Thread(target=self.llm_job, args=(text, prompt_text, llm_prompt_speech_token, llm_embedding, this_uuid))
         else:
@@ -187,7 +207,9 @@ class CosyVoiceModel:
         if stream is True:
             token_hop_len = self.token_min_hop_len
             while True:
-                time.sleep(0.1)
+                # Use condition.wait() with timeout instead of sleep for event-driven notification
+                with token_cond:
+                    token_cond.wait(timeout=0.01)
                 if len(self.tts_speech_token_dict[this_uuid]) >= token_hop_len + self.token_overlap_len:
                     this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid][:token_hop_len + self.token_overlap_len]) \
                         .unsqueeze(dim=0)
@@ -232,6 +254,7 @@ class CosyVoiceModel:
             self.mel_overlap_dict.pop(this_uuid)
             self.hift_cache_dict.pop(this_uuid)
             self.flow_cache_dict.pop(this_uuid)
+            self.token_conditions.pop(this_uuid, None)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.current_stream().synchronize()
@@ -266,6 +289,8 @@ class CosyVoice2Model(CosyVoiceModel):
         self.tts_speech_token_dict = {}
         self.llm_end_dict = {}
         self.hift_cache_dict = {}
+        # condition variables for event-driven token notification (reduce polling delay)
+        self.token_conditions = {}
 
     def load_jit(self, flow_encoder_model):
         flow_encoder = torch.jit.load(flow_encoder_model, map_location=self.device)
@@ -325,9 +350,12 @@ class CosyVoice2Model(CosyVoiceModel):
             prompt_speech_feat=torch.zeros(1, 0, 80), source_speech_token=torch.zeros(1, 0, dtype=torch.int32), stream=False, speed=1.0, **kwargs):
         # this_uuid is used to track variables related to this inference thread
         this_uuid = str(uuid.uuid1())
+        # Create condition variable for event-driven token notification
+        token_cond = threading.Condition()
         with self.lock:
             self.tts_speech_token_dict[this_uuid], self.llm_end_dict[this_uuid] = [], False
             self.hift_cache_dict[this_uuid] = None
+            self.token_conditions[this_uuid] = token_cond
         if source_speech_token.shape[1] == 0:
             p = threading.Thread(target=self.llm_job, args=(text, prompt_text, llm_prompt_speech_token, llm_embedding, this_uuid))
         else:
@@ -337,7 +365,9 @@ class CosyVoice2Model(CosyVoiceModel):
             token_offset = 0
             prompt_token_pad = int(np.ceil(flow_prompt_speech_token.shape[1] / self.token_hop_len) * self.token_hop_len - flow_prompt_speech_token.shape[1])
             while True:
-                time.sleep(0.1)
+                # Use condition.wait() with timeout instead of sleep for event-driven notification
+                with token_cond:
+                    token_cond.wait(timeout=0.01)
                 this_token_hop_len = self.token_hop_len + prompt_token_pad if token_offset == 0 else self.token_hop_len
                 if len(self.tts_speech_token_dict[this_uuid]) - token_offset >= this_token_hop_len + self.flow.pre_lookahead_len:
                     this_tts_speech_token = torch.tensor(self.tts_speech_token_dict[this_uuid][:token_offset + this_token_hop_len + self.flow.pre_lookahead_len]).unsqueeze(dim=0)
@@ -381,6 +411,7 @@ class CosyVoice2Model(CosyVoiceModel):
             self.tts_speech_token_dict.pop(this_uuid)
             self.llm_end_dict.pop(this_uuid)
             self.hift_cache_dict.pop(this_uuid)
+            self.token_conditions.pop(this_uuid, None)
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.current_stream().synchronize()

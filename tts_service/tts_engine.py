@@ -45,6 +45,24 @@ class TTSEngine:
 
             self.sample_rate = self.model.sample_rate
             logger.info(f"模型加载成功，采样率: {self.sample_rate}")
+
+            # 模型预热：执行一次推理以初始化GPU内存和CUDA kernel
+            logger.info("正在预热模型...")
+            try:
+                # 尝试获取一个可用的speaker ID进行预热
+                # 如果没有可用的speaker，预热会被跳过
+                await loop.run_in_executor(None, lambda: list(
+                    self.model.inference_zero_shot(
+                        "预热", "", "",
+                        zero_shot_spk_id="hutao",
+                        stream=True
+                    )
+                ))
+                logger.info("模型预热完成")
+            except Exception as warmup_error:
+                # 预热失败不影响服务启动，只记录警告
+                logger.warning(f"模型预热失败（可忽略，不影响正常使用）: {warmup_error}")
+
         except Exception as e:
             logger.error(f"模型加载失败: {e}")
             raise

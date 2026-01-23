@@ -2,6 +2,7 @@
 import json
 import logging
 import base64
+import asyncio
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.websockets import WebSocketState
@@ -23,11 +24,79 @@ class WebSocketSynthesisRequest(BaseModel):
     chunk_id: Optional[int] = None  # 可选，用于标识不同文本片段
 
 
+async def _send_audio_stream(websocket: WebSocket, text: str, spk_id: str, chunk_id: Optional[int]):
+    """
+    真流式音频发送：每个chunk生成后立即发送
+
+    此函数直接迭代生成器，每个chunk生成后立即发送到客户端，
+    而不是等待所有chunk生成完再发送。
+    """
+    import torch
+    import torchaudio
+
+    # 创建重采样器：从24000Hz重采样到16000Hz
+    resampler = torchaudio.transforms.Resample(
+        orig_freq=tts_engine.sample_rate,
+        new_freq=tts_engine.output_sample_rate
+    )
+
+    first_chunk_sent = False
+    chunk_index = 0
+
+    try:
+        # 直接迭代生成器，每个chunk立即发送
+        for chunk in tts_engine.model.inference_zero_shot(
+            text,
+            '',
+            '',
+            zero_shot_spk_id=spk_id,
+            stream=True
+        ):
+            # 检查连接状态
+            if websocket.client_state != WebSocketState.CONNECTED:
+                logger.info(f"WebSocket 连接已断开，停止生成 (chunk_id={chunk_id})")
+                break
+
+            audio_data = chunk.get('tts_speech')
+            if audio_data is not None:
+                # 重采样到16000Hz
+                if isinstance(audio_data, torch.Tensor):
+                    audio_resampled = resampler(audio_data)
+                else:
+                    audio_resampled = audio_data
+
+                audio_bytes = tts_engine._convert_to_pcm_bytes(audio_resampled)
+                if audio_bytes and len(audio_bytes) > 0:
+                    # 编码为 base64
+                    audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+                    await websocket.send_json({
+                        "type": "audio",
+                        "chunk_id": chunk_id,
+                        "data": audio_b64,
+                        "done": False
+                    })
+
+                    if not first_chunk_sent:
+                        logger.info(f"首帧已发送: chunk_id={chunk_id}, spk_id={spk_id}")
+                        first_chunk_sent = True
+
+                    chunk_index += 1
+                    logger.debug(f"发送音频块 {chunk_index} (chunk_id={chunk_id}): {len(audio_bytes)} bytes")
+
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket 连接已断开 (chunk_id={chunk_id})")
+        raise
+    except Exception as e:
+        logger.error(f"音频生成或发送失败: {e}")
+        raise
+
+
 @router.websocket("/ws")
 async def websocket_synthesize(websocket: WebSocket):
     """
-    WebSocket 端点：流式TTS合成
-    
+    WebSocket 端点：流式TTS合成（真流式实现）
+
     消息格式：
     {
         "action": "synthesize",
@@ -35,7 +104,7 @@ async def websocket_synthesize(websocket: WebSocket):
         "spk_id": "说话人ID",
         "chunk_id": 1  # 可选
     }
-    
+
     返回格式：
     # 音频块
     {
@@ -44,13 +113,13 @@ async def websocket_synthesize(websocket: WebSocket):
         "data": "<base64_encoded_audio>",
         "done": false
     }
-    
+
     # 完成信号
     {
         "type": "complete",
         "chunk_id": 1
     }
-    
+
     # 错误信号
     {
         "type": "error",
@@ -60,14 +129,14 @@ async def websocket_synthesize(websocket: WebSocket):
     """
     await websocket.accept()
     logger.info("WebSocket 客户端已连接")
-    
+
     try:
         while True:
             # 检查连接是否仍然打开
             if websocket.client_state != WebSocketState.CONNECTED:
                 logger.info("WebSocket 连接未打开，退出主循环")
                 break
-            
+
             # 接收客户端消息
             try:
                 data = await websocket.receive_text()
@@ -85,7 +154,7 @@ async def websocket_synthesize(websocket: WebSocket):
                 except Exception as send_error:
                     logger.warning(f"发送错误消息失败: {send_error}")
                 continue
-            
+
             # 处理合成请求
             if request.get("action") != "synthesize":
                 await websocket.send_json({
@@ -94,11 +163,11 @@ async def websocket_synthesize(websocket: WebSocket):
                     "data": "Unknown action, expected 'synthesize'"
                 })
                 continue
-            
+
             text = request.get("text", "").strip()
             spk_id = request.get("spk_id", "").strip()
             chunk_id = request.get("chunk_id")
-            
+
             # 验证参数
             if not text:
                 try:
@@ -111,7 +180,7 @@ async def websocket_synthesize(websocket: WebSocket):
                 except Exception as send_error:
                     logger.warning(f"发送验证错误消息失败: {send_error}")
                 continue
-            
+
             if not spk_id:
                 try:
                     if websocket.client_state == WebSocketState.CONNECTED:
@@ -123,7 +192,7 @@ async def websocket_synthesize(websocket: WebSocket):
                 except Exception as send_error:
                     logger.warning(f"发送验证错误消息失败: {send_error}")
                 continue
-            
+
             # 检查说话人是否存在
             try:
                 speaker = await db.get_speaker(spk_id)
@@ -150,74 +219,14 @@ async def websocket_synthesize(websocket: WebSocket):
                 except Exception as send_error:
                     logger.warning(f"发送错误消息失败: {send_error}")
                 continue
-            
-            # 执行合成
+
+            # 执行合成（真流式）
             try:
                 logger.info(f"WebSocket 合成请求: chunk_id={chunk_id}, spk_id={spk_id}, text_length={len(text)}")
-                
-                # 在线程池中执行模型推理
-                import asyncio
-                loop = asyncio.get_event_loop()
-                
-                def _model_inference():
-                    """同步推理函数（在线程池中执行）"""
-                    results = []
-                    # 创建重采样器：从24000Hz重采样到16000Hz
-                    import torchaudio
-                    resampler = torchaudio.transforms.Resample(
-                        orig_freq=tts_engine.sample_rate,
-                        new_freq=tts_engine.output_sample_rate
-                    )
-                    
-                    for i, chunk in enumerate(tts_engine.model.inference_zero_shot(
-                        text,
-                        '',
-                        '',
-                        zero_shot_spk_id=spk_id,
-                        stream=True
-                    )):
-                        audio_data = chunk.get('tts_speech')
-                        if audio_data is not None:
-                            # 重采样到16000Hz
-                            import torch
-                            if isinstance(audio_data, torch.Tensor):
-                                audio_resampled = resampler(audio_data)
-                            else:
-                                audio_resampled = audio_data
-                            
-                            audio_bytes = tts_engine._convert_to_pcm_bytes(audio_resampled)
-                            if audio_bytes and len(audio_bytes) > 0:
-                                results.append((i, audio_bytes))
-                    return results
-                
-                # 在线程池中执行推理
-                results = await loop.run_in_executor(None, _model_inference)
-                
-                # 发送音频块
-                for i, audio_bytes in results:
-                    # 检查连接是否仍然打开
-                    if websocket.client_state != WebSocketState.CONNECTED:
-                        logger.info(f"WebSocket 连接已断开，跳过发送数据 (chunk_id={chunk_id})")
-                        break
-                    
-                    try:
-                        # 编码为 base64
-                        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
-                        
-                        await websocket.send_json({
-                            "type": "audio",
-                            "chunk_id": chunk_id,
-                            "data": audio_b64,
-                            "done": False
-                        })
-                        logger.debug(f"发送音频块 {i} (chunk_id={chunk_id}): {len(audio_bytes)} bytes")
-                    except WebSocketDisconnect:
-                        logger.info(f"WebSocket 连接已断开，停止发送 (chunk_id={chunk_id})")
-                        break
-                    except Exception as send_error:
-                        logger.error(f"发送音频块失败: {send_error}")
-                        break
-                
+
+                # 使用真流式发送：每个chunk生成后立即发送
+                await _send_audio_stream(websocket, text, spk_id, chunk_id)
+
                 # 发送完成信号
                 try:
                     if websocket.client_state == WebSocketState.CONNECTED:
@@ -238,12 +247,15 @@ async def websocket_synthesize(websocket: WebSocket):
                     if "close message" in error_msg or "not connected" in error_msg.lower():
                         logger.info(f"检测到连接已关闭，退出主循环")
                         break
-                
+
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket 连接在合成过程中断开 (chunk_id={chunk_id})")
+                break
             except Exception as e:
                 logger.error(f"WebSocket 合成失败: {e}")
                 import traceback
                 traceback.print_exc()
-                
+
                 # 只在连接打开时发送错误信息
                 if websocket.client_state == WebSocketState.CONNECTED:
                     try:
@@ -263,7 +275,7 @@ async def websocket_synthesize(websocket: WebSocket):
                             break
                 else:
                     logger.info(f"WebSocket 已断开，跳过发送错误消息 (chunk_id={chunk_id})")
-    
+
     except WebSocketDisconnect:
         logger.info("WebSocket 客户端已断开连接")
     except Exception as e:

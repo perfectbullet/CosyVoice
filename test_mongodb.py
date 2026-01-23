@@ -4,7 +4,7 @@ MongoDB 连接测试脚本
 
 用法:
     python test_mongodb.py              # 测试默认连接
-    python test_mongodb.py --host 192.168.1.100  # 指定主机
+    python test_mongodb.py --host 192.168.8.233  # 指定主机
     python test_mongodb.py --remote     # 使用远程连接字符串
 """
 

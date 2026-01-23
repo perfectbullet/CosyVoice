@@ -11,15 +11,9 @@ import time
 import websockets
 
 # 配置
-WS_URL = "ws://192.168.8.230:50002/streaming/ws"
-SPEAKER_ID = "胡桃"  # 请替换为你的说话人ID
+WS_URL = "ws://192.168.8.233:50002/streaming/ws"
+SPEAKER_ID = "hutao"  # 请替换为你的说话人ID
 
-# 
-WS_URL = "ws://192.168.8.230:50002/streaming/ws"
-SPEAKER_ID = "胡桃"  # 请替换为你的说话人ID
-
-
-# 
 
 # 多个文本片段
 TEXT_CHUNKS = [
@@ -35,6 +29,12 @@ TEXT_CHUNKS = [
     {"text": "永远珍藏在心间。", "chunk_id": 10},
 ]
 
+# 合并后的长文本片段
+TEXT_CHUNKS_LONG = [
+    {"text": "收到好友从远方寄来的生日礼物，那份意外的惊喜与深深的祝福，让我心中充满了甜蜜的快乐，笑容如花儿般绽放。", "chunk_id": 1},
+    {"text": "感谢有你陪伴我走过的每一天，你的友情如星光般璀璨，照亮了我前行的路。", "chunk_id": 2},
+    {"text": "愿我们的友谊长存，如同这美好的时光，永远珍藏在心间。", "chunk_id": 3},
+]
 
 def add_wav_header(pcm_data: bytes, sample_rate: int = 16000, num_channels: int = 1, sample_width: int = 2) -> bytes:
     """为原始 PCM 数据添加 WAV 文件头"""
@@ -82,7 +82,7 @@ async def test_websocket_tts():
             print()
 
             # 处理多个文本片段
-            for chunk_info in TEXT_CHUNKS:
+            for chunk_info in TEXT_CHUNKS_LONG:
                 chunk_text = chunk_info["text"]
                 chunk_id = chunk_info["chunk_id"]
 
