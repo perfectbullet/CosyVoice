@@ -6,6 +6,8 @@ services:
     image: mongo:6.0
     container_name: tts_mongodb
     restart: unless-stopped
+    ports:
+      - "27017:27017"  # 暴露 MongoDB 端口给外部
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: tts_password_2024

@@ -14,6 +14,13 @@ import websockets
 WS_URL = "ws://192.168.8.230:50002/streaming/ws"
 SPEAKER_ID = "胡桃"  # 请替换为你的说话人ID
 
+# 
+WS_URL = "ws://192.168.8.230:50002/streaming/ws"
+SPEAKER_ID = "胡桃"  # 请替换为你的说话人ID
+
+
+# 
+
 # 多个文本片段
 TEXT_CHUNKS = [
     {"text": "收到好友从远方寄来的生日礼物，", "chunk_id": 1},
