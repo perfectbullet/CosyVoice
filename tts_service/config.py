@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     ASR_IS_SSL: str = os.getenv("ASR_IS_SSL", "true")
     ASR_MODE: str = os.getenv("ASR_MODE", "2pass")
 
+    # Redis 缓存配置
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    AUDIO_CACHE_TTL: int = int(os.getenv("AUDIO_CACHE_TTL", "604800"))  # 7天（秒）
+    ENABLE_AUDIO_CACHE: bool = os.getenv("ENABLE_AUDIO_CACHE", "true").lower() == "true"
+
     class Config:
         env_file = ".env"
 

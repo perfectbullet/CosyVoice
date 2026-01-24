@@ -12,7 +12,7 @@ private_key: "/home/zj/.ssh/id_rsa"  # Path to private key (私钥路径)
 # private_key_password: "key_password"   # Password for encrypted key (私钥密码，如果私钥有密码保护)
 
 # Directory settings (目录设置)
-local_dir: "/home/zj/zenking_work/metahuman_work/CosyVoice"      # Local directory to sync (要同步的本地目录)
+local_dir: "/home/zj/zenking_work/metahuman_work/CosyVoice-stable"      # Local directory to sync (要同步的本地目录)
 remote_dir: "/data/metahuman_work/CosyVoice"    # Remote directory (远程目录)
 
 # Include patterns (包含模式) - Which files to sync

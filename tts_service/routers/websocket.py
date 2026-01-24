@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from tts_service.database import db
 from tts_service.tts_engine import tts_engine
+from tts_service.cache import audio_cache
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,21 @@ class WebSocketSynthesisRequest(BaseModel):
 
 async def _send_audio_stream(websocket: WebSocket, text: str, spk_id: str, chunk_id: Optional[int]):
     """
-    真流式音频发送：每个chunk生成后立即发送
+    真流式音频发送：支持缓存
 
-    此函数直接迭代生成器，每个chunk生成后立即发送到客户端，
-    而不是等待所有chunk生成完再发送。
+    1. 先检查缓存，命中则直接返回
+    2. 未命中则执行合成
+    3. 合成完成后存储到缓存
     """
+    # 1. 尝试从缓存获取
+    cached_chunks = await audio_cache.get(spk_id, text)
+    if cached_chunks:
+        logger.info(f"使用缓存音频: chunk_id={chunk_id}, spk_id={spk_id}")
+        for chunk_msg in cached_chunks:
+            await websocket.send_json(chunk_msg)
+        return
+
+    # 2. 缓存未命中，执行合成
     import torch
     import torchaudio
 
@@ -40,6 +51,7 @@ async def _send_audio_stream(websocket: WebSocket, text: str, spk_id: str, chunk
         new_freq=tts_engine.output_sample_rate
     )
 
+    chunks_to_cache = []
     first_chunk_sent = False
     chunk_index = 0
 
@@ -70,12 +82,15 @@ async def _send_audio_stream(websocket: WebSocket, text: str, spk_id: str, chunk
                     # 编码为 base64
                     audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
 
-                    await websocket.send_json({
+                    chunk_msg = {
                         "type": "audio",
                         "chunk_id": chunk_id,
                         "data": audio_b64,
                         "done": False
-                    })
+                    }
+                    chunks_to_cache.append(chunk_msg)
+
+                    await websocket.send_json(chunk_msg)
 
                     if not first_chunk_sent:
                         logger.info(f"首帧已发送: chunk_id={chunk_id}, spk_id={spk_id}")
@@ -90,6 +105,22 @@ async def _send_audio_stream(websocket: WebSocket, text: str, spk_id: str, chunk
     except Exception as e:
         logger.error(f"音频生成或发送失败: {e}")
         raise
+
+    # 3. 存储到缓存
+    if chunks_to_cache:
+        await audio_cache.set(spk_id, text, chunks_to_cache)
+
+
+@router.on_event("startup")
+async def startup_event():
+    """服务启动时连接缓存"""
+    await audio_cache.connect()
+
+
+@router.on_event("shutdown")
+async def shutdown_event():
+    """服务关闭时断开缓存"""
+    await audio_cache.close()
 
 
 @router.websocket("/ws")

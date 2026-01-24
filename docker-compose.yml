@@ -24,13 +24,37 @@ services:
       retries: 5
       start_period: 20s
 
+  # Redis 缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: cosyvoice_redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --maxmemory 1024mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - cosyvoice-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   # CosyVoice TTS 服务
   cosyvoice:
-    image: cosyvoice:v1.6
+    image: cosyvoice:v1.7
     build:
       context: .
       dockerfile: docker/Dockerfile
-    container_name: cosyvoice_v6
+    container_name: cosyvoice
     working_dir: /opt/CosyVoice
     # 修改启动命令为运行 FastAPI 服务
     command: python tts_service/main.py
@@ -75,6 +99,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         reservations:
@@ -96,6 +122,8 @@ volumes:
   mongodb_data:
     driver: local
   mongodb_config:
+    driver: local
+  redis_data:
     driver: local
 
 networks:
