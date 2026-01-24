@@ -77,7 +77,12 @@ async def test_websocket_tts():
     total_audio_bytes = 0
 
     try:
-        async with websockets.connect(WS_URL) as websocket:
+        async with websockets.connect(
+            WS_URL,
+            ping_interval=20,   # 发送 ping 的间隔（秒）
+            ping_timeout=20,    # 等待 pong 的超时时间
+            close_timeout=1     # close 握手超时
+        ) as websocket:
             print("✓ WebSocket 已连接")
             print()
 
@@ -108,7 +113,7 @@ async def test_websocket_tts():
 
                 while True:
                     try:
-                        message = await asyncio.wait_for(websocket.recv(), timeout=30)
+                        message = await asyncio.wait_for(websocket.recv(), timeout=60)
                         response = json.loads(message)
 
                         if response["type"] == "audio":
@@ -157,7 +162,7 @@ async def test_websocket_tts():
                             break
 
                     except asyncio.TimeoutError:
-                        print("  ✗ 接收超时")
+                        print(f"  ✗ 接收超时 (超过60秒)")
                         break
 
             # 合并所有音频为一个文件

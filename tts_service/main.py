@@ -89,4 +89,10 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=settings.HOST, port=settings.PORT)
+    uvicorn.run(
+        app,
+        host=settings.HOST,
+        port=settings.PORT,
+        ws_ping_interval=20,   # WebSocket ping 间隔（秒）
+        ws_ping_timeout=20,    # WebSocket ping 超时（秒）
+    )
