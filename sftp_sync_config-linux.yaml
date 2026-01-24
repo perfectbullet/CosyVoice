@@ -5,26 +5,28 @@
 host: "192.168.8.233"         # Remote server IP or hostname (远程服务器IP或主机名)
 port: 22                       # SSH port (SSH端口)
 username: "zenking"             # SSH username (SSH用户名)
-password: "your_passphrase_here"         # SSH password (SSH密码) - Optional if using private_key
 
 # SSH key authentication (SSH密钥认证) - More secure than password
 private_key: "/home/zj/.ssh/id_rsa"  # Path to private key (私钥路径)
 # private_key_password: "key_password"   # Password for encrypted key (私钥密码，如果私钥有密码保护)
 
 # Directory settings (目录设置)
-local_dir: "/home/zj/zenking_work/metahuman_work/CosyVoice-stable"      # Local directory to sync (要同步的本地目录)
+local_dir: "/home/zj/zenking_work/metahuman_work/CosyVoice"      # Local directory to sync (要同步的本地目录)
 remote_dir: "/data/metahuman_work/CosyVoice"    # Remote directory (远程目录)
 
 # Include patterns (包含模式) - Which files to sync
 include_patterns:
   # - "*"                        # Include all files by default (默认包含所有文件)
-  - "*.py"                   # Only Python files
+  
   #- "*.js"                   # Only JavaScript files
   # - "src/**"                 # Only files in src directory
-  # - "docker-compose.yml"     # Specific file to include
+  - "docker-compose.yml"     # Specific file to include
   - "tts_service"            # Include app directory
-  # - "requirements.txt"
+  - "requirements.txt"
   - ".env"
+  - docker/
+  - Dockerfile
+  - "*.py"                   # Only Python files
   # - ai-service/tests
   # - outer_api_docs
 

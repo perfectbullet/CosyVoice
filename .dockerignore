@@ -2,3 +2,7 @@ pretrained_models
 .venv
 .github
 .git
+modelscope_hub
+data
+pretrained_models
+wheel_packages

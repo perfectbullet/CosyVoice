@@ -51,9 +51,9 @@ services:
   # CosyVoice TTS 服务
   cosyvoice:
     image: cosyvoice:v1.7
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
+    # build:
+      # context: .
+      # dockerfile: docker/Dockerfile
     container_name: cosyvoice
     working_dir: /opt/CosyVoice
     # 修改启动命令为运行 FastAPI 服务

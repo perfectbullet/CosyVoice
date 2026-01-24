@@ -82,7 +82,7 @@ async def test_websocket_tts():
             print()
 
             # 处理多个文本片段
-            for chunk_info in TEXT_CHUNKS_LONG:
+            for chunk_info in TEXT_CHUNKS:
                 chunk_text = chunk_info["text"]
                 chunk_id = chunk_info["chunk_id"]
 
