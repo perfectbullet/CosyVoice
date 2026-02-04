@@ -62,3 +62,5 @@ pretrained_models/*
 wheel_packages/onnxruntime_gpu-1.18.0-cp310-cp310-manylinux_2_28_x86_64.whl
 sftp_sync_config.yaml
 info.log
+.claude/settings.local.json
+docker/Dockerfile-v1
